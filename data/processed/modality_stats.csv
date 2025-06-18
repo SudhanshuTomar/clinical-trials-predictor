@@ -1,0 +1,4 @@
+modality_category,total_trials,success_count,success_rate
+Bi-modality,124,55,0.4435483870967742
+Multi-modality,20,8,0.4
+Single-modality,554,237,0.427797833935018
