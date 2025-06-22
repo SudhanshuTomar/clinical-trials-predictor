@@ -93,12 +93,3 @@ def load_nct_ids_from_csv(filepath: str, id_column: str = 'Trial_ID') -> List[st
     df = pd.read_csv(filepath)
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace(r'[^\w_]', '', regex=True)
     return df[id_column.lower()].dropna().astype(str).tolist()
-
-
-if __name__ == '__main__':
-    # Example usage:
-    # train_ids = load_nct_ids_from_csv('Train.csv')
-    # fetch_trials_data(train_ids, 'historical_trials_data.csv')
-    # test_ids = load_nct_ids_from_csv('Test.csv')
-    # fetch_trials_data(test_ids, 'active_trials_data.csv')
-    pass

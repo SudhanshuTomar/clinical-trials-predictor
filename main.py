@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 import os
 
-from data_ingest import load_nct_ids_from_csv, fetch_trials_data
-from feature_engineer import engineering_pipeline, clean_column_names
-from data_prep import prepare_datasets
-from modeling import (
+from src.data_ingest import load_nct_ids_from_csv, fetch_trials_data
+from src.feature_engineer import engineering_pipeline, clean_column_names
+from src.data_prep import prepare_datasets
+from src.modeling import (
     create_baseline_model,
     train_advanced_models,
     create_ensemble_model,
     calibrate_model,
 )
-from evaluation import evaluate_model, plot_pr_roc_curves, plot_calibration_curve
-from prediction import save_model, get_pts_scores, export_predictions
+from src.evaluation import evaluate_model, plot_pr_roc_curves, plot_calibration_curve
+from src.prediction import save_model, get_pts_scores, export_predictions
 import os
 from datetime import datetime
 
