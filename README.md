@@ -10,15 +10,6 @@ This project predicts whether a Phase III clinical trial will succeed or fail, u
 
 ## 📦 Pipeline Overview
 ![Pipeline Flow Diagram](PipelineFlowDiagram.png)
-```mermaid
-flowchart LR
-    A[Trial IDs] --> B[Fetch Metadata via API]
-    B --> C[Clean & Parse Columns]
-    C --> D[Feature Engineering]
-    D --> E[Train + Val Split (Temporal)]
-    E --> F[Modeling + Tuning]
-    F --> G[PTS Score + Explainability]
-````
 
 ---
 
