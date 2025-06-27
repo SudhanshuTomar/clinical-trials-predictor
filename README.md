@@ -1,6 +1,6 @@
 # 🎯 Phase III Clinical Trial Success Predictor
 
-This project predicts whether a Phase III clinical trial will succeed or fail, using **public metadata from ClinicalTrials.gov** — with no access to patient-level data or internal outcomes.
+This project predicts whether a Phase III clinical trial will succeed or fail, using **public metadata from ClinicalTrials.gov** — with no access to patient-level data.
 
 🧠 **Problem Statement**
 
@@ -39,12 +39,12 @@ This project predicts whether a Phase III clinical trial will succeed or fail, u
 * Complete pipeline with modular scripts for:
 
   * `data_ingest.py`
-  * `feature_engineering.py`
-  * `preprocessing.py`
-  * `model_training.py`
+  * `feature_engineer.py`
+  * `data_prep.py`
+  * `modeling.py`
   * `evaluation.py`
-  * `shap_utils.py`
-  * `main_pipeline.py`
+  * `prediction.py`
+  * `main.py`
 
 ---
 
@@ -64,12 +64,12 @@ This project predicts whether a Phase III clinical trial will succeed or fail, u
 ├── notebooks/              # Exploration and EDA
 ├── src/
 │   ├── data_ingest.py
-│   ├── feature_engineering.py
-│   ├── preprocessing.py
-│   ├── model_training.py
+│   ├── feature_engineer.py
+│   ├── data_prep.py
+│   ├── modeling.py
 │   ├── evaluation.py
-│   ├── shap_utils.py
-│   └── main_pipeline.py
+│   └── prediction.py
+├── main.py
 └── README.md
 ```
 
@@ -78,7 +78,7 @@ This project predicts whether a Phase III clinical trial will succeed or fail, u
 ## 💡 Run Pipeline
 
 ```bash
-python src/main_pipeline.py
+python src/main.py
 ```
 
 ---
