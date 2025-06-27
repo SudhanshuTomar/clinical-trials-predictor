@@ -95,5 +95,5 @@ pip install -r requirements.txt
 
 ## 🧠 Author
 
-Built and maintained by [Sudhanshu Tomar]((https://www.linkedin.com/in/sudhanshu-tomar-431878203/)).
+Built and maintained by [Sudhanshu Tomar](https://www.linkedin.com/in/sudhanshu-tomar-431878203/).
 Mostly a weekend hackathon project — but one that turned into a full-fledged ML system. ⚙️
