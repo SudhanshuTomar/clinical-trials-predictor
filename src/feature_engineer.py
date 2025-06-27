@@ -111,7 +111,7 @@ def create_date_features(df: pd.DataFrame) -> pd.DataFrame:
 # -----------------------------------
 # Sponsor Features
 # -----------------------------------
-def create_sponsor_approval_rate(df: pd.DataFrame) -> pd.DataFrame:
+def create_sponsor_approval_rate(df: pd.DataFrame, sponsor_rates: pd.Series = None) -> pd.DataFrame:
     """
     Calculates sponsor-specific approval rate and merges into the DataFrame.
 
@@ -121,12 +121,15 @@ def create_sponsor_approval_rate(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Updated DataFrame with 'sponsor_approval_rate'
     """
-
     df = df.copy()
-    if 'sponsor' in df.columns and 'outcome' in df.columns:
-        rates = df.groupby('sponsor')['outcome'].mean().rename('sponsor_approval_rate')
-        df['sponsor_approval_rate'] = df['sponsor'].map(rates).fillna(rates.mean())
-    return df
+    if sponsor_rates is None:
+        # FALLBACK: compute on-the-fly (just as before)
+        df['outcome_numeric'] = df['outcome'].map({'Approved': 1, 'Failed': 0})
+        rates = df.groupby('sponsor')['outcome_numeric'].mean().rename('sponsor_approval_rate')
+    else:
+        rates = sponsor_rates
+    df['sponsor_approval_rate'] = df['sponsor'].map(rates).fillna(rates.mean())
+    return df.drop(columns=['outcome_numeric'], errors='ignore')
 
 # -----------------------------------
 # Location Features
@@ -324,7 +327,7 @@ def map_area(condition: str) -> str:
                 return area
     return 'Other'
 
-def create_therapeutic_area_features(df: pd.DataFrame) -> pd.DataFrame:
+def create_therapeutic_area_features(df: pd.DataFrame,therapeutic_rates: pd.Series = None) -> pd.DataFrame:
     """
     Assigns therapeutic area based on 'conditions' and calculates area-level approval rate.
 
@@ -336,26 +339,51 @@ def create_therapeutic_area_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     if 'conditions' in df.columns:
-        # assign area
-        df['therapeutic_area'] = (
-            df['conditions'].astype(str)
-              .str.split('|')
-              .explode()
-              .str.strip()
-              .map(map_area)
+        exploded_conditions = (
+            df[['nct_number', 'conditions']]
+              .assign(condition=lambda d: d['conditions'].astype(str).str.split('|'))
+              .explode('condition')
         )
-        # majority vote per trial
-        df['therapeutic_area'] = (
-            df.groupby('nct_number')['therapeutic_area']
-              .agg(lambda x: x.mode().iloc[0] if not x.mode().empty else 'Other')
-              .reindex(df['nct_number'])
-              .values
+        exploded_conditions['condition'] = exploded_conditions['condition'].str.strip()
+        exploded_conditions['therapeutic_area_per_condition'] = exploded_conditions['condition'].apply(map_area)
+        trial_therapeutic_area = (
+            exploded_conditions
+            .groupby('nct_number')['therapeutic_area_per_condition']
+            .agg(lambda x: x.mode().iloc[0] if not x.mode().empty else 'Other')
+            .reset_index(name='therapeutic_area')
         )
-        # compute approval rate if outcome present
-        if 'outcome' in df.columns:
-            rates = df.groupby('therapeutic_area')['outcome'].mean().rename('therapeutic_area_approval_rate')
-            df['therapeutic_area_approval_rate'] = df['therapeutic_area'].map(rates).fillna(rates.mean())
-    return df
+        df = df.merge(trial_therapeutic_area, on='nct_number', how='left')
+        df['therapeutic_area'] = df['therapeutic_area'].fillna('Other')
+    if therapeutic_rates is None and 'outcome' in df.columns:
+        tmp = df.copy()
+        tmp['outcome_numeric'] = tmp['outcome'].map({'Approved': 1, 'Failed': 0})
+        therapeutic_rates = tmp.groupby('therapeutic_area')['outcome_numeric'].mean().rename('therapeutic_area_approval_rate')
+    if therapeutic_rates is not None:
+        df['therapeutic_area_approval_rate'] = df['therapeutic_area'].map(therapeutic_rates).fillna(therapeutic_rates.mean())
+    return df.drop(columns=['outcome_numeric'], errors='ignore')
+
+
+# -----------------------------------
+# Compute and store approval rates
+# -----------------------------------
+def compute_approval_rates(df: pd.DataFrame):
+    """
+    From a DataFrame with 'sponsor', 'outcome', and (after mapping) 'therapeutic_area',
+    return two Series:
+      - sponsor_rates: mean approved (0–1) per sponsor
+      - therapeutic_rates: mean approved per therapeutic area
+    """
+    # numeric outcome
+    tmp = df.copy()
+    tmp['outcome_numeric'] = tmp['outcome'].map({'Approved': 1, 'Failed': 0})
+    
+    sponsor_rates = tmp.groupby('sponsor')['outcome_numeric']\
+                       .mean().rename('sponsor_approval_rate')
+    
+    therapeutic_rates = tmp.groupby('therapeutic_area')['outcome_numeric']\
+                           .mean().rename('therapeutic_area_approval_rate')
+    
+    return sponsor_rates, therapeutic_rates
 
 # -----------------------------------
 # Study Design Features
@@ -379,9 +407,16 @@ def process_study_design(df: pd.DataFrame, column_name: str='study_design') -> p
     df = df.copy()
 
     # Step 1: Extract fields using regex
-    df[['Allocation', 'Intervention Model', 'Masking', 'Primary Purpose']] = df[column_name].str.extract(
-        r'Allocation:\s*([^|]*)\|Intervention Model:\s*([^|]*)\|Masking:\s*([^|]*)\|Primary Purpose:\s*(.*)'
+    # Use .str.extract with expand=True explicitly
+    extracted_cols = df[column_name].str.extract(
+        r'Allocation:\s*([^|]*)\|Intervention Model:\s*([^|]*)\|Masking:\s*([^|]*)\|Primary Purpose:\s*(.*)', expand=True
     )
+
+    # Assign extracted columns
+    df['Allocation'] = extracted_cols[0]
+    df['Intervention Model'] = extracted_cols[1]
+    df['Masking'] = extracted_cols[2]
+    df['Primary Purpose'] = extracted_cols[3]
 
     # Step 2: Clean & Normalize
     for col in ['Allocation', 'Intervention Model', 'Masking', 'Primary Purpose']:
@@ -427,13 +462,18 @@ def encode_features(df: pd.DataFrame, cat_cols: list, label_cols: list=None):
     if label_cols:
         for col in label_cols:
             le = LabelEncoder()
-            df[col] = le.fit_transform(df[col].astype(str))
+            # Handle potential NaN values by converting to string before encoding
+            df[col] = le.fit_transform(df[col].astype(str).fillna('')) # Fill NaN with empty string for consistent encoding
             encoders[col] = le
     # One-hot encode
     if cat_cols:
-        ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
+        # Handle potential NaN values in categorical columns before encoding
+        for col in cat_cols:
+             df[col] = df[col].fillna('Missing_Category') # Fill NaN with a placeholder category
+        ohe = OneHotEncoder(sparse_output=False, handle_unknown='ignore') # Use sparse_output instead of sparse
         arr = ohe.fit_transform(df[cat_cols].astype(str))
         ohe_cols = ohe.get_feature_names_out(cat_cols)
+        # Ensure index alignment when creating the new DataFrame
         df_ohe = pd.DataFrame(arr, columns=ohe_cols, index=df.index)
         df = pd.concat([df.drop(columns=cat_cols), df_ohe], axis=1)
         encoders['ohe'] = ohe
@@ -467,4 +507,37 @@ def engineering_pipeline(df: pd.DataFrame) -> pd.DataFrame:
     df = create_intervention_features(df)
     df = create_therapeutic_area_features(df)
     df = process_study_design(df)
+    df = clean_column_names(df)
+    return df
+
+# -----------------------------------
+# Test dataset Feature Engineering Pipeline
+# -----------------------------------
+def engineering_pipeline_test(train_df: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Full end-to-end feature engineering pipeline combining:
+    - Column name cleaning
+    - Status group creation
+    - Date parsing
+    - Sponsor, location, and intervention processing
+    - Therapeutic area assignment
+    - Study design breakdown
+
+    Parameters:
+        train_df (pd.DataFrame): Raw trial dataset
+        test_df (pd.DataFrame): Raw trial dataset
+
+    Returns:
+        pd.DataFrame: Feature-enriched dataset
+    """
+    sponsor_rates, therapeutic_rates = compute_approval_rates(train_df)
+    df = clean_column_names(df)
+    df = create_status_group(df)
+    df = create_date_features(df)
+    df = create_sponsor_approval_rate(df, sponsor_rates)
+    df = create_location_features(df)
+    df = create_intervention_features(df)
+    df = create_therapeutic_area_features(df, therapeutic_rates)
+    df = process_study_design(df)
+    df = clean_column_names(df)
     return df

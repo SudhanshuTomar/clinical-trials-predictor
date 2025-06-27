@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os
-
+import pandas as pd
 from src.data_ingest import load_nct_ids_from_csv, fetch_trials_data
 from src.feature_engineer import engineering_pipeline, clean_column_names
 from src.data_prep import prepare_datasets
@@ -24,14 +24,21 @@ FEATURE_CSV     = "data/processed/feat_df_final.csv"
 today_str      = datetime.now().strftime("%Y%m%d")
 MODEL_PKL      = f"models/final_model_{today_str}.pkl"
 PREDICTIONS_CSV= f"predictions/active_trial_pts_{today_str}.csv"
+
 # 2. Step 1: Data Ingestion
 if not os.path.exists(HIST_DATA_CSV):
-    train_ids = load_nct_ids_from_csv(TRAIN_IDS_CSV, id_column="nct_id")
+    train_ids = load_nct_ids_from_csv(TRAIN_IDS_CSV, id_column="NCT Number")
     fetch_trials_data(train_ids, HIST_DATA_CSV)
 
 if not os.path.exists(ACTIVE_DATA_CSV):
-    active_ids = load_nct_ids_from_csv(ACTIVE_IDS_CSV, id_column="nct_id")
+    active_ids = load_nct_ids_from_csv(ACTIVE_IDS_CSV, id_column="Trial_ID")
     fetch_trials_data(active_ids, ACTIVE_DATA_CSV)
+
+#Merge outcome column from train_ids_csv into hist_data_csv
+df_train = pd.read_csv(TRAIN_IDS_CSV)
+df_hist = pd.read_csv(HIST_DATA_CSV)
+df_hist = df_hist.merge(df_train[['NCT Number', 'Outcome']], on='NCT Number', how='left')
+df_hist.to_csv(HIST_DATA_CSV, index=False)
 
 # 3. Step 2: Feature Engineering
 if not os.path.exists(FEATURE_CSV):

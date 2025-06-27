@@ -4,12 +4,11 @@ import io
 import time
 import pandas as pd
 from typing import List
-import pandas as pd
 import numpy as np
 import re
-from typing import List
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
+import sys # Import sys
 
 # ------------------------------
 # Configuration and Constants
@@ -30,12 +29,21 @@ API_PARAMS = {
 def fetch_trials_data(nct_ids: List[str], output_filename: str, delay: float = 1.0):
     """
     Fetch metadata from ClinicalTrials.gov for a list of NCT IDs and write to CSV.
-    
+
     Args:
         nct_ids (List[str]): List of NCT IDs to fetch.
         output_filename (str): Output CSV path.
         delay (float): Delay between requests to be polite to the API.
     """
+    # Increase the CSV field size limit
+    max_int = sys.maxsize
+    while True:
+        try:
+            csv.field_size_limit(max_int)
+            break
+        except OverflowError:
+            max_int = int(max_int / 2)
+
     with open(output_filename, 'w', newline='', encoding='utf-8') as csv_file:
         csv_writer = csv.writer(csv_file)
         header_written = False
@@ -86,10 +94,9 @@ def load_nct_ids_from_csv(filepath: str, id_column: str = 'Trial_ID') -> List[st
     Args:
         filepath (str): Path to CSV file.
         id_column (str): Name of the column containing NCT IDs.
-    
+
     Returns:
         List[str]: A list of NCT IDs
     """
     df = pd.read_csv(filepath)
-    df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace(r'[^\w_]', '', regex=True)
-    return df[id_column.lower()].dropna().astype(str).tolist()
+    return df[id_column].dropna().astype(str).tolist()
